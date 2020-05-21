@@ -2,7 +2,8 @@
 一个js文件搞定支付宝支付
 
 # 环境依赖
-安装nodejs环境
+nodejs
+express
 
 # 文件对应说明
 pc.js 电脑网站支付
