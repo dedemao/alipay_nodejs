@@ -5,16 +5,20 @@ const ALIPAY_ALGORITHM_MAPPING = {
     RSA2: 'RSA-SHA256',
 };
 
-module.exports = {
-    appid:'',
-    return_url:'',
-    notify_url:'',
-    out_trade_no:new Date().getTime(),
-    pay_amount:0.01,
-    order_name:'test',
-    sign_type:'RSA2',
-    charset:'utf-8',
-    rsa_private_key:'',
+class alipayService {
+    constructor(config) {
+        if (!config.appid) throw Error('config.appid is required');
+        if (!config.rsa_private_key) throw Error('config.rsa_private_key is required');
+        this.appid = config.appid
+        this.rsa_private_key = config.rsa_private_key
+        this.pay_amount = config.total_amount
+        this.order_name = config.subject
+        this.out_trade_no = config.out_trade_no
+        this.sign_type = 'RSA2'
+        this.return_url = config.return_url
+        this.notify_url = config.notify_url
+        this.charset = 'utf-8'
+	}
     doPay() {
         //请求参数
         let requestConfigs = {
@@ -23,7 +27,6 @@ module.exports = {
             'total_amount':this.pay_amount, //单位 元
             'subject':this.order_name,  //订单标题
         };
-
         let commonConfigs = {
             //公共参数
             'app_id' : this.appid,
@@ -39,7 +42,7 @@ module.exports = {
         };
         commonConfigs = this.sign(commonConfigs);
         return this.buildRequestForm(commonConfigs);
-    },
+    }
     sign(params) {
         let date = new Date();
         let month = (date.getMonth() + 1).toString().padStart(2,'0');
@@ -50,7 +53,7 @@ module.exports = {
         // 排序
         const signStr = Object.keys(params).sort().map((key) => {
             let data = params[key];
-            if (Array.prototype.toString.call(data) !== '[object String]') {
+            if (data && Array.prototype.toString.call(data) !== '[object String]') {
                 data = JSON.stringify(data);
             }
             return `${key}=${data}`;
@@ -77,7 +80,7 @@ module.exports = {
         const sign = crypto.createSign(ALIPAY_ALGORITHM_MAPPING[params.sign_type])
             .update(signStr, 'utf8').sign(privateKey, 'base64');
         return Object.assign(params, { sign });
-    },
+    }
     getCurrentTime() {
         let date = new Date();
         let month = (date.getMonth() + 1).toString().padStart(2,'0');
@@ -86,9 +89,9 @@ module.exports = {
         let minutesStr = date.getMinutes().toString().padStart(2,'0');
         let secondsStr = date.getSeconds().toString().padStart(2,'0');
 
-        //时间格式HH:MM:SS
+        //时间格式YYYY-mm-dd HH:MM:SS
         return `${date.getFullYear()}-${month}-${dateStr} ${hourStr}:${minutesStr}:${secondsStr}`;
-    },
+    }
     buildRequestForm(params) {
         let sHtml = "正在跳转至支付页面...<form id='alipaysubmit' name='alipaysubmit' action='https://openapi.alipay.com/gateway.do?charset="+this.charset+"' method='POST'>";
         Object.keys(params).map((key) => {
@@ -103,3 +106,5 @@ module.exports = {
         return sHtml;
     }
 }
+
+module.exports = alipayService
