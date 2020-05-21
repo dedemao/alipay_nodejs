@@ -38,7 +38,6 @@ module.exports = {
             'biz_content':requestConfigs,
         };
         commonConfigs = this.sign(commonConfigs);
-        console.log(commonConfigs);
         return this.buildRequestForm(commonConfigs);
     },
     sign(params) {
