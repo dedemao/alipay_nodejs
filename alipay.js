@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const request = require('request');
 
 const ALIPAY_ALGORITHM_MAPPING = {
     RSA: 'RSA-SHA1',
@@ -9,54 +10,74 @@ class alipayService {
     constructor(config) {
         if (!config.appid) throw Error('config.appid is required');
         if (!config.rsa_private_key) throw Error('config.rsa_private_key is required');
+        if (!config.method) throw Error('config.method is required');
         this.appid = config.appid
         this.rsa_private_key = config.rsa_private_key
+        this.method = config.method
+        this.method_type = config.method_type ? config.method_type :''
         this.alipay_public_key = config.alipay_public_key
-        this.pay_amount = config.total_amount
-        this.order_name = config.subject
-        this.out_trade_no = config.out_trade_no
         this.sign_type = 'RSA2'
         this.return_url = config.return_url
         this.notify_url = config.notify_url
         this.charset = 'utf-8'
+        this.gateway = 'https://openapi.alipay.com/gateway.do?charset=' + this.charset
     }
 
-    doPay() {
+    //发起支付
+    doPay(requestParams = {}) {
         //请求参数
-        let requestConfigs = {
-            'out_trade_no': this.out_trade_no,
-            'product_code': 'FAST_INSTANT_TRADE_PAY',
-            'total_amount': this.pay_amount, //单位 元
-            'subject': this.order_name,  //订单标题
-        };
-        let commonConfigs = {
+        let commonParams = {
             //公共参数
             'app_id': this.appid,
-            'method': 'alipay.trade.page.pay',             //接口名称
+            'method': this.method,             //接口名称
             'format': 'JSON',
-            'return_url': this.return_url,
             'charset': this.charset,
             'sign_type': 'RSA2',
             'version': '1.0',
-            'notify_url': this.notify_url,
             'timestamp': `${this.getCurrentTime()}`,
-            'biz_content': requestConfigs,
         };
-        commonConfigs = this.sign(commonConfigs);
-        return this.buildRequestForm(commonConfigs);
+        if (this.return_url) {
+            commonParams.return_url = this.return_url
+        }
+        if (this.notify_url) {
+            commonParams.notify_url = this.notify_url
+        }
+        if (requestParams && JSON.stringify(requestParams) != "{}") {
+            commonParams.biz_content = requestParams;
+        }
+        commonParams = this.sign(commonParams);
+        if (this.method_type == 'page')
+            return this.buildRequestForm(commonParams)
+        else return this.postData(commonParams)
+    }
+
+    postData(params = {}) {
+        return new Promise((resolve, reject) => {
+            request.post({
+                url: this.gateway,
+                form: params,
+            }, function (error, response, body) {
+                if (!error && response.statusCode == 200) {
+                    body = JSON.parse(body)
+                    const responseKey = `${params.method.replace(/\./g, '_')}_response`
+                    const response = body[responseKey]
+                    if (response.code == '10000')
+                        resolve(response)
+                    else
+                        reject(response)
+                } else {
+                    console.log(error)
+                    reject(error)
+                }
+            })
+        })
     }
 
     sign(params) {
         if (params.biz_content)
             params.biz_content = JSON.stringify(params.biz_content);
-        // 排序
-        const signStr = Object.keys(params).sort().map((key) => {
-            let data = params[key];
-            if (data && Array.prototype.toString.call(data) !== '[object String]') {
-                data = JSON.stringify(data);
-            }
-            return `${key}=${data}`;
-        }).join('&');
+        //获取签名字符串
+        const signStr = this.getSignContent(params);
 
         let privateKey = this.rsa_private_key
         privateKey = "-----BEGIN RSA PRIVATE KEY-----\n" +
@@ -130,7 +151,7 @@ class alipayService {
     }
 
     //验证签名
-    verify(paramStr,sign,signType) {
+    verify(paramStr, sign, signType) {
         let publicKey = this.alipay_public_key
         // 未设置“支付宝公钥”或签名字符串不存在，验签不通过
         if (!publicKey || !paramStr) {
