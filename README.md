@@ -6,8 +6,12 @@ nodejs
 
 express
 
+request
+
 # 文件对应说明
 pc.js 电脑网站支付
+
+qrcode.js 当面付（扫码支付）
 
 # 如何使用
 
